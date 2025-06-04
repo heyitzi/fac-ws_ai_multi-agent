@@ -76,8 +76,8 @@ def refactorer_agent(state: CodeReviewState) -> CodeReviewState:
 
 
 def quality_gate(state: CodeReviewState) -> Literal["refactor", "complete"]:
-    quality_threshold = 7
-    max_iterations = 3
+    quality_threshold = 9
+    max_iterations = 5
 
     # always at least one round of refactoring by tracking iteration_count (if = 0 will always refactor)
     if state["quality_score"] >= quality_threshold and state["iteration_count"] > 0:
