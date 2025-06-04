@@ -4,9 +4,25 @@ from langgraph.graph import StateGraph, START, END
 from typing import TypedDict
 from dotenv import load_dotenv
 from utils import SequentialCodebase
+import json
+import os
+from datetime import datetime
 
 load_dotenv()
 
+def save_state(state: dict, node_name: str) -> None:
+    """Save the current state to a JSON file for debugging."""
+
+    debug_dir = "debug_states"
+    os.makedirs(debug_dir, exist_ok=True)
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{debug_dir}/state_{node_name}_{timestamp}.json"
+    
+    with open(filename, 'w', encoding='utf-8') as f:
+        json.dump(state, f, indent=2)
+    
+    print(f"Debug state saved: {filename}")
 
 class CodeReviewState(TypedDict):
     input: str
@@ -42,22 +58,30 @@ tester_prompt = ChatPromptTemplate.from_messages([
 
 def coder_agent(state: CodeReviewState) -> CodeReviewState:
     response = llm.invoke(coder_prompt.format_messages(input=state["input"]))
-    return {"code": response.content}
+    new_state = {"code": response.content}
+    save_state(new_state, "coder")
+    return new_state
 
 
 def reviewer_agent(state: CodeReviewState) -> CodeReviewState:
     response = llm.invoke(reviewer_prompt.format_messages(code=state["code"]))
-    return {"review": response.content}
+    new_state = {"review": response.content}
+    save_state(new_state, "reviewer")
+    return new_state
 
 
 def refactorer_agent(state: CodeReviewState) -> CodeReviewState:
     response = llm.invoke(refactorer_prompt.format_messages(
         code=state["code"], review=state["review"]))
-    return {"refactored_code": response.content}
+    new_state = {"refactored_code": response.content}
+    save_state(new_state, "refactorer")
+    return new_state
 
 def tester_agent(state: CodeReviewState) -> CodeReviewState:
     response = llm.invoke(tester_prompt.format_messages(refactored_code=state["refactored_code"]))
-    return {"unit_tests": response.content}
+    new_state = {"unit_tests": response.content}
+    save_state(new_state, "tester")
+    return new_state
 
 
 builder = StateGraph(CodeReviewState)
