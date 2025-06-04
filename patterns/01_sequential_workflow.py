@@ -13,24 +13,30 @@ class CodeReviewState(TypedDict):
     code: str
     review: str
     refactored_code: str
+    unit_tests: str
 
 
 llm = ChatOpenAI(model="gpt-4.1-nano")
 
 coder_prompt = ChatPromptTemplate.from_messages([
-    ("system", "You are a Senior Software Engineer. Write clean, well-structured Python code based on requirements."),
+    ("system", "You are a Security-Focused Software Engineer. Write secure Python code that follows security best practices, handles input validation, and protects against common vulnerabilities like injection attacks, XSS, and data exposure."),
     ("human", "{input}")
 ])
 
 reviewer_prompt = ChatPromptTemplate.from_messages([
-    ("system", "You are a Code Reviewer. Provide constructive feedback focusing on readability, efficiency, and best practices."),
-    ("human", "Review this code:\n{code}")
+    ("system", "You are a Security Code Reviewer. Focus on identifying security vulnerabilities, improper input validation, unsafe data handling, and potential attack vectors. Provide specific security-focused feedback."),
+    ("human", "Review this code for security issues:\n{code}")
 ])
 
 refactorer_prompt = ChatPromptTemplate.from_messages([
-    ("system", "You are a Refactoring Expert. Implement the suggested improvements while maintaining functionality."),
+    ("system", "You are a Security Refactoring Expert. Implement security improvements while maintaining functionality. Focus on fixing vulnerabilities, adding proper input validation, and implementing secure coding practices."),
     ("human",
-     "Original code:\n{code}\n\nReview feedback:\n{review}\n\nRefactor accordingly:")
+     "Original code:\n{code}\n\nSecurity review feedback:\n{review}\n\nRefactor to address security concerns:")
+])
+
+tester_prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a Security Tester. Write comprehensive security-focused unit tests that verify proper input validation, error handling, and protection against common attack vectors. Include tests for edge cases and malicious inputs."),
+    ("human", "Write security tests for this code:\n{refactored_code}")
 ])
 
 
@@ -49,16 +55,22 @@ def refactorer_agent(state: CodeReviewState) -> CodeReviewState:
         code=state["code"], review=state["review"]))
     return {"refactored_code": response.content}
 
+def tester_agent(state: CodeReviewState) -> CodeReviewState:
+    response = llm.invoke(tester_prompt.format_messages(refactored_code=state["refactored_code"]))
+    return {"unit_tests": response.content}
+
 
 builder = StateGraph(CodeReviewState)
 builder.add_node("coder", coder_agent)
 builder.add_node("reviewer", reviewer_agent)
 builder.add_node("refactorer", refactorer_agent)
+builder.add_node("tester", tester_agent)
 
 builder.add_edge(START, "coder")
 builder.add_edge("coder", "reviewer")
 builder.add_edge("reviewer", "refactorer")
-builder.add_edge("refactorer", END)
+builder.add_edge("refactorer", "tester")
+builder.add_edge("tester", END)
 
 workflow = builder.compile()
 
