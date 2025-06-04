@@ -1,14 +1,33 @@
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import StateGraph, START, END
-from typing import TypedDict
+from typing import TypedDict, Callable
 from dotenv import load_dotenv
 from utils import SequentialCodebase
 import json
 import os
 from datetime import datetime
+import time
+import functools
 
 load_dotenv()
+
+def time_node_execution(func: Callable) -> Callable:
+    """Decorator to measure and log execution time of agent functions."""
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        node_name = func.__name__.replace('_agent', '')
+        print(f"🔄 Starting {node_name}...")
+        start_time = time.time()
+        
+        result = func(*args, **kwargs)
+        
+        end_time = time.time()
+        execution_time = end_time - start_time
+        print(f"✅ {node_name} completed in {execution_time:.2f}s")
+        
+        return result
+    return wrapper
 
 def save_state(state: dict, node_name: str) -> None:
     """Save the current state to a JSON file for debugging."""
@@ -56,6 +75,7 @@ tester_prompt = ChatPromptTemplate.from_messages([
 ])
 
 
+@time_node_execution
 def coder_agent(state: CodeReviewState) -> CodeReviewState:
     response = llm.invoke(coder_prompt.format_messages(input=state["input"]))
     new_state = {"code": response.content}
@@ -63,6 +83,7 @@ def coder_agent(state: CodeReviewState) -> CodeReviewState:
     return new_state
 
 
+@time_node_execution
 def reviewer_agent(state: CodeReviewState) -> CodeReviewState:
     response = llm.invoke(reviewer_prompt.format_messages(code=state["code"]))
     new_state = {"review": response.content}
@@ -70,6 +91,7 @@ def reviewer_agent(state: CodeReviewState) -> CodeReviewState:
     return new_state
 
 
+@time_node_execution
 def refactorer_agent(state: CodeReviewState) -> CodeReviewState:
     response = llm.invoke(refactorer_prompt.format_messages(
         code=state["code"], review=state["review"]))
@@ -77,6 +99,7 @@ def refactorer_agent(state: CodeReviewState) -> CodeReviewState:
     save_state(new_state, "refactorer")
     return new_state
 
+@time_node_execution
 def tester_agent(state: CodeReviewState) -> CodeReviewState:
     response = llm.invoke(tester_prompt.format_messages(refactored_code=state["refactored_code"]))
     new_state = {"unit_tests": response.content}
